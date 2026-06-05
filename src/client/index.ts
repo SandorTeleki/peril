@@ -2,14 +2,14 @@ import amqp from "amqplib";
 import { clientWelcome, getInput, printClientHelp, printQuit, commandStatus } from "../internal/gamelogic/gamelogic.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
-import type { ArmyMove } from "../internal/gamelogic/gamedata.js";
+import type { ArmyMove, RecognitionOfWar } from "../internal/gamelogic/gamedata.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { SimpleQueueType } from "../internal/pubsub/queue.js";
 import { subscribeJSON } from "../internal/pubsub/subscribe.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
-import { ExchangePerilDirect, ExchangePerilTopic, PauseKey, ArmyMovesPrefix } from "../internal/routing/routing.js";
-import { handlerPause, handlerMove } from "./handlers.js";
+import { ExchangePerilDirect, ExchangePerilTopic, PauseKey, ArmyMovesPrefix, WarRecognitionsPrefix } from "../internal/routing/routing.js";
+import { handlerPause, handlerMove, handlerWar } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -21,6 +21,9 @@ async function main() {
   const username = await clientWelcome();
 
   const gs = new GameState(username);
+
+  // Create a confirm channel for publishing
+  const publishCh = await conn.createConfirmChannel();
 
   // Subscribe to pause messages
   const pauseQueue = `pause.${username}`;
@@ -42,12 +45,20 @@ async function main() {
     movesQueue,
     `${ArmyMovesPrefix}.*`,
     SimpleQueueType.Transient,
-    handlerMove(gs),
+    handlerMove(gs, publishCh),
   );
   console.log(`Subscribed to ${movesQueue}.`);
 
-  // Create a confirm channel for publishing moves
-  const publishCh = await conn.createConfirmChannel();
+  // Subscribe to war messages (shared durable queue)
+  await subscribeJSON<RecognitionOfWar>(
+    conn,
+    ExchangePerilTopic,
+    "war",
+    `${WarRecognitionsPrefix}.*`,
+    SimpleQueueType.Durable,
+    handlerWar(gs),
+  );
+  console.log("Subscribed to war queue.");
 
   while (true) {
     const words = await getInput();
