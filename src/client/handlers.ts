@@ -30,8 +30,12 @@ export function handlerMove(gs: GameState, publishCh: ConfirmChannel): (move: Ar
           defender: gs.getPlayerSnap(),
         };
         const routingKey = `${WarRecognitionsPrefix}.${gs.getUsername()}`;
-        await publishJSON(publishCh, ExchangePerilTopic, routingKey, rw);
-        return AckType.NackRequeue;
+        try {
+          await publishJSON(publishCh, ExchangePerilTopic, routingKey, rw);
+        } catch {
+          return AckType.NackRequeue;
+        }
+        return AckType.Ack;
       }
       case MoveOutcome.SamePlayer:
       default:
