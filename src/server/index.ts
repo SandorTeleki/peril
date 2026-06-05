@@ -1,6 +1,7 @@
 import amqp from "amqplib";
 import { publishJSON } from "../internal/pubsub/publish.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import { declareAndBind, SimpleQueueType } from "../internal/pubsub/queue.js";
+import { ExchangePerilDirect, ExchangePerilTopic, PauseKey, GameLogSlug } from "../internal/routing/routing.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { printServerHelp, getInput } from "../internal/gamelogic/gamelogic.js";
 
@@ -13,6 +14,15 @@ async function main() {
 
   const ch = await conn.createConfirmChannel();
   console.log("Confirm channel created.");
+
+  await declareAndBind(
+    conn,
+    ExchangePerilTopic,
+    GameLogSlug,
+    `${GameLogSlug}.*`,
+    SimpleQueueType.Durable,
+  );
+  console.log("Game logs queue declared and bound.");
 
   printServerHelp();
 
