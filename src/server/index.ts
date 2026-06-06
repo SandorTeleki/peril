@@ -1,8 +1,11 @@
 import amqp from "amqplib";
 import { publishJSON } from "../internal/pubsub/publish.js";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/queue.js";
+import { SimpleQueueType } from "../internal/pubsub/queue.js";
+import { subscribeMsgPack, AckType } from "../internal/pubsub/subscribe.js";
 import { ExchangePerilDirect, ExchangePerilTopic, PauseKey, GameLogSlug } from "../internal/routing/routing.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
+import type { GameLog } from "../internal/gamelogic/logs.js";
+import { writeLog } from "../internal/gamelogic/logs.js";
 import { printServerHelp, getInput } from "../internal/gamelogic/gamelogic.js";
 
 async function main() {
@@ -15,14 +18,24 @@ async function main() {
   const ch = await conn.createConfirmChannel();
   console.log("Confirm channel created.");
 
-  await declareAndBind(
+  await subscribeMsgPack<GameLog>(
     conn,
     ExchangePerilTopic,
     GameLogSlug,
     `${GameLogSlug}.*`,
     SimpleQueueType.Durable,
+    async (gameLog: GameLog) => {
+      try {
+        await writeLog(gameLog);
+        process.stdout.write("> ");
+        return AckType.Ack;
+      } catch {
+        process.stdout.write("> ");
+        return AckType.NackRequeue;
+      }
+    },
   );
-  console.log("Game logs queue declared and bound.");
+  console.log("Subscribed to game logs.");
 
   printServerHelp();
 
