@@ -1,6 +1,6 @@
 import amqp from "amqplib";
 import type { ConfirmChannel } from "amqplib";
-import { clientWelcome, getInput, printClientHelp, printQuit, commandStatus } from "../internal/gamelogic/gamelogic.js";
+import { clientWelcome, getInput, printClientHelp, printQuit, commandStatus, getMaliciousLog } from "../internal/gamelogic/gamelogic.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import type { ArmyMove, RecognitionOfWar } from "../internal/gamelogic/gamedata.js";
@@ -94,7 +94,20 @@ async function main() {
       } else if (command === "help") {
         printClientHelp();
       } else if (command === "spam") {
-        console.log("Spamming not allowed yet!");
+        if (words.length < 2) {
+          console.log("Usage: spam <n>");
+          continue;
+        }
+        const n = parseInt(words[1]!, 10);
+        if (isNaN(n)) {
+          console.log("Usage: spam <n> (n must be an integer)");
+          continue;
+        }
+        for (let i = 0; i < n; i++) {
+          const msg = getMaliciousLog();
+          await publishGameLog(publishCh, username, msg);
+        }
+        console.log(`Published ${n} game log messages.`);
       } else if (command === "quit") {
         printQuit();
         break;
