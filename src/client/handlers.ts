@@ -44,10 +44,16 @@ export function handlerMove(gs: GameState, publishCh: ConfirmChannel): (move: Ar
   };
 }
 
-export function handlerWar(gs: GameState): (rw: RecognitionOfWar) => AckType {
-  return (rw: RecognitionOfWar) => {
+export function handlerWar(
+  gs: GameState,
+  publishCh: ConfirmChannel,
+  publishGameLog: (ch: ConfirmChannel, username: string, message: string) => Promise<void>,
+): (rw: RecognitionOfWar) => Promise<AckType> {
+  return async (rw: RecognitionOfWar) => {
     const resolution = handleWar(gs, rw);
     process.stdout.write("> ");
+
+    const username = gs.getUsername();
 
     switch (resolution.result) {
       case WarOutcome.NotInvolved:
@@ -55,10 +61,25 @@ export function handlerWar(gs: GameState): (rw: RecognitionOfWar) => AckType {
       case WarOutcome.NoUnits:
         return AckType.NackDiscard;
       case WarOutcome.YouWon:
+        try {
+          await publishGameLog(publishCh, username, `${resolution.winner} won a war against ${resolution.loser}`);
+        } catch {
+          return AckType.NackRequeue;
+        }
         return AckType.Ack;
       case WarOutcome.OpponentWon:
+        try {
+          await publishGameLog(publishCh, username, `${resolution.winner} won a war against ${resolution.loser}`);
+        } catch {
+          return AckType.NackRequeue;
+        }
         return AckType.Ack;
       case WarOutcome.Draw:
+        try {
+          await publishGameLog(publishCh, username, `A war between ${resolution.attacker} and ${resolution.defender} resulted in a draw`);
+        } catch {
+          return AckType.NackRequeue;
+        }
         return AckType.Ack;
       default:
         console.error("Unknown war outcome");
